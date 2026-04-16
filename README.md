@@ -1,8 +1,9 @@
-<img width="1280" height="720" alt="1757947315_one_ui_8_story" src="https://github.com/user-attachments/assets/06889b9d-1bd6-4dcb-b49d-9c8d1aaa0085" />
+
 
 # What is ProjectDozG?
 
   - ProjectDozG is a project that bring higher OneUI version to Old phone and unlock High-end feature for midrange variant , still a small Project that handle by Dai_Doz  
+  - Important It based on the UN1CA build system which allows automatic downloading/extraction of the firmware, applying the required patches and generating a flashable zip package for the specified target device.
 
   
 # Feature✨
@@ -24,6 +25,13 @@
 - Unlock Higher FPS option in Game(Example:Pubg)
 - Play Integrity Fix integrated
 # Licensing
-- This project is licensed under the terms of the GNU General Public License v2.0  
+- This project is licensed under the terms of the GNU General Public License v3.0. External dependencies might be distributed under a different license, such as:
+
+- android-tools, licensed under the Apache License 2.0
+- apktool, licensed under the Apache License 2.0
+- erofs-utils, dual license (GPL-2.0, Apache-2.0)
+- img2sdat, licensed under the MIT License
+- platform_build (ext4_utils, f2fs_utils, signapk), licensed under the Apache License 2.0
+- smali, multiple licenses
 
 
