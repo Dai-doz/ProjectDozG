@@ -1,3 +1,4 @@
+<img width="1280" height="720" alt="1757947315_one_ui_8_story(1)" src="https://github.com/user-attachments/assets/e4c310e8-b030-4397-a275-0d97d0117cee" />
 
 
 # What is ProjectDozG?
