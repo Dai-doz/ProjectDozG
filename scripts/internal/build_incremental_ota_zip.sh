@@ -23,6 +23,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT INT
 
 CALCULATE_MIN_CACHE_SIZE()
 {
+    local PRUNE_CACHE_FILES="$1"
+
     local MAX="0"
     local VAL="0"
 
@@ -31,8 +33,11 @@ CALCULATE_MIN_CACHE_SIZE()
         if [ "$VAL" -gt "$MAX" ]; then
             MAX="$VAL"
         fi
-        rm "$f"
     done < <(find "$TMP_DIR" -maxdepth 1 -type f -name "*.max_stashed_size")
+
+    if $PRUNE_CACHE_FILES || [[ "$MAX" == "0" ]]; then
+        find "$TMP_DIR" -maxdepth 1 -type f -name "*.max_stashed_size" -delete &> /dev/null
+    fi
 
     echo -n "$MAX"
 }
@@ -140,7 +145,7 @@ GENERATE_OP_LIST()
         fi
     done
 
-    if [[ "$OCCUPIED_SPACE" -gt "$TARGET_SUPER_GROUP_SIZE" ]]; then
+    if [ "$OCCUPIED_SPACE" -gt "$TARGET_SUPER_GROUP_SIZE" ]; then
         LOGE "OS size ($OCCUPIED_SPACE) is bigger than the target group size ($TARGET_SUPER_GROUP_SIZE)"
         exit 1
     fi
@@ -275,10 +280,10 @@ GENERATE_UPDATER_SCRIPT()
             fi
         done
 
-        if [ "$(find "$TMP_DIR" -maxdepth 1 -type f -name "*.max_stashed_size" | wc -l)" -gt "0" ]; then
+        if [ "$(CALCULATE_MIN_CACHE_SIZE false)" -gt "0" ]; then
             # https://android.googlesource.com/platform/build/+/refs/tags/android-16.0.0_r4/tools/releasetools/edify_generator.py#212
             echo -n "apply_patch_space("
-            CALCULATE_MIN_CACHE_SIZE
+            CALCULATE_MIN_CACHE_SIZE true
             echo -n ") || abort("
             echo    '"E3006: Not enough free space on /cache to apply patches.");'
         fi

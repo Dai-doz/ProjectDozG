@@ -56,7 +56,7 @@ GENERATE_OP_LIST()
         done
     } > "$OP_LIST_FILE"
 
-    if [[ "$OCCUPIED_SPACE" -gt "$SUPER_GROUP_SIZE" ]]; then
+    if [ "$OCCUPIED_SPACE" -gt "$SUPER_GROUP_SIZE" ]; then
         LOGE "OS size ($OCCUPIED_SPACE) is bigger than the target group size ($SUPER_GROUP_SIZE)"
         exit 1
     fi

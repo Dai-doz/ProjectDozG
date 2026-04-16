@@ -31,7 +31,7 @@ GET_DEVICE_FROM_MOUNTPOINT()
     if [ ! -f "$FSTAB_FILE" ]; then
         if grep -q "TARGET_PLATFORM=" "$SRC_DIR/target/$TARGET_CODENAME/config.sh"; then
             FSTAB_FILE="$SRC_DIR/platform/"
-            FSTAB_FILE+="$(grep "TARGET_PLATFORM=" "$SRC_DIR/target/$TARGET_CODENAME/config.sh" | cut -f 2 -d "=" | sed "s/\"//g")"
+            FSTAB_FILE+="$(grep "TARGET_PLATFORM=" "$SRC_DIR/target/$TARGET_CODENAME/config.sh" | cut -d "=" -f 2 | sed "s/\"//g")"
             FSTAB_FILE+="/installer/recovery.fstab"
         fi
     fi
@@ -43,13 +43,13 @@ GET_DEVICE_FROM_MOUNTPOINT()
     if $TARGET_USE_DYNAMIC_PARTITIONS && IS_VALID_PARTITION_NAME "${MOUNTPOINT/\//}"; then
         echo -n "map_partition(\"${MOUNTPOINT/\//}\")"
     else
-        local FILESYSTEM
-        FILESYSTEM="$(grep -w "$MOUNTPOINT" "$FSTAB_FILE")"
-        FILESYSTEM="$(sed "/^#/d" <<< "$FILESYSTEM")"
-        FILESYSTEM="$(head -n 1 <<< "$FILESYSTEM")"
-        FILESYSTEM="$(cut -f 1 <<< "$FILESYSTEM" | cut -f 1 -d " ")"
+        local DEVICE
+        DEVICE="$(grep -w "$MOUNTPOINT" "$FSTAB_FILE")"
+        DEVICE="$(sed "/^#/d" <<< "$DEVICE")"
+        DEVICE="$(head -n 1 <<< "$DEVICE")"
+        DEVICE="$(cut -f 1 <<< "$DEVICE" | cut -d " " -f 1)"
 
-        if [ ! "$FILESYSTEM" ]; then
+        if [ ! "$DEVICE" ]; then
             if [[ "$MOUNTPOINT" == "/dt" ]]; then
                 GET_DEVICE_FROM_MOUNTPOINT "/dtb"
             elif [[ "$MOUNTPOINT" == "/system" ]]; then
@@ -58,9 +58,9 @@ GET_DEVICE_FROM_MOUNTPOINT()
                 LOGW "No entry for \"$MOUNTPOINT\" found in target fstab"
                 exit 1
             fi
+        else
+            echo -n "\"$DEVICE\""
         fi
-
-        echo -n "\"$FILESYSTEM\""
     fi
 }
 
@@ -114,9 +114,9 @@ PRINT_BUILD_INFO()
     local SOURCE_BUILD_INFO
     local TARGET_BUILD_INFO
 
-    if [ "$#" == "1" ]; then
+    if [[ "$#" == "1" ]]; then
         TARGET_BUILD_INFO="$1"
-    elif [ "$#" == "2" ]; then
+    elif [[ "$#" == "2" ]]; then
         SOURCE_BUILD_INFO="$1"
         TARGET_BUILD_INFO="$2"
     else
