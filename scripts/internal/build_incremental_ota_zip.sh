@@ -23,6 +23,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT INT
 
 CALCULATE_MIN_CACHE_SIZE()
 {
+    local PRUNE_CACHE_FILES="$1"
+
     local MAX="0"
     local VAL="0"
 
@@ -31,8 +33,11 @@ CALCULATE_MIN_CACHE_SIZE()
         if [ "$VAL" -gt "$MAX" ]; then
             MAX="$VAL"
         fi
-        rm "$f"
     done < <(find "$TMP_DIR" -maxdepth 1 -type f -name "*.max_stashed_size")
+
+    if $PRUNE_CACHE_FILES || [[ "$MAX" == "0" ]]; then
+        find "$TMP_DIR" -maxdepth 1 -type f -name "*.max_stashed_size" -delete &> /dev/null
+    fi
 
     echo -n "$MAX"
 }
@@ -140,7 +145,7 @@ GENERATE_OP_LIST()
         fi
     done
 
-    if [[ "$OCCUPIED_SPACE" -gt "$TARGET_SUPER_GROUP_SIZE" ]]; then
+    if [ "$OCCUPIED_SPACE" -gt "$TARGET_SUPER_GROUP_SIZE" ]; then
         LOGE "OS size ($OCCUPIED_SPACE) is bigger than the target group size ($TARGET_SUPER_GROUP_SIZE)"
         exit 1
     fi
@@ -234,15 +239,15 @@ GENERATE_UPDATER_SCRIPT()
                 echo -n "$p"
                 echo    ' will be patched unconditionally.");'
             else
-                echo -n 'if (range_sha1(map_partition("'
-                echo -n "$p"
-                echo -n '"), "'
+                echo -n "if (range_sha1("
+                GET_DEVICE_FROM_MOUNTPOINT "/$p"
+                echo -n ', "'
                 cat "$TMP_DIR/$p.touched_src_ranges"
                 echo -n '") == "'
                 cat "$TMP_DIR/$p.touched_src_sha1" && rm -f "$TMP_DIR/$p.touched_src_sha1"
-                echo -n '" || block_image_verify(map_partition("'
-                echo -n "$p"
-                echo -n '"), package_extract_file("'
+                echo -n '" || block_image_verify('
+                GET_DEVICE_FROM_MOUNTPOINT "/$p"
+                echo -n ', package_extract_file("'
                 echo -n "$p.transfer.list"
                 echo -n '"), "'
                 echo -n "$p.new.dat"
@@ -253,13 +258,13 @@ GENERATE_UPDATER_SCRIPT()
                 echo -n "$p image..."
                 echo    '");'
                 echo    'else'
-                echo -n 'ifelse (block_image_recover(map_partition("'
-                echo -n "$p"
-                echo -n '"), "'
+                echo -n "ifelse (block_image_recover("
+                GET_DEVICE_FROM_MOUNTPOINT "/$p"
+                echo -n ', "'
                 cat "$TMP_DIR/$p.touched_src_ranges" && rm -f "$TMP_DIR/$p.touched_src_ranges"
-                echo -n '") && block_image_verify(map_partition("'
-                echo -n "$p"
-                echo -n '"), package_extract_file("'
+                echo -n '") && block_image_verify('
+                GET_DEVICE_FROM_MOUNTPOINT "/$p"
+                echo -n ', package_extract_file("'
                 echo -n "$p.transfer.list"
                 echo -n '"), "'
                 echo -n "$p.new.dat"
@@ -275,10 +280,10 @@ GENERATE_UPDATER_SCRIPT()
             fi
         done
 
-        if [ "$(find "$TMP_DIR" -maxdepth 1 -type f -name "*.max_stashed_size" | wc -l)" -gt "0" ]; then
+        if [ "$(CALCULATE_MIN_CACHE_SIZE false)" -gt "0" ]; then
             # https://android.googlesource.com/platform/build/+/refs/tags/android-16.0.0_r4/tools/releasetools/edify_generator.py#212
             echo -n "apply_patch_space("
-            CALCULATE_MIN_CACHE_SIZE
+            CALCULATE_MIN_CACHE_SIZE true
             echo -n ") || abort("
             echo    '"E3006: Not enough free space on /cache to apply patches.");'
         fi
@@ -286,59 +291,61 @@ GENERATE_UPDATER_SCRIPT()
         # https://android.googlesource.com/platform/build/+/refs/tags/android-16.0.0_r4/tools/releasetools/non_ab_ota.py#453
         echo -e "\n# ---- start making changes here ----\n"
 
-        # https://android.googlesource.com/platform/build/+/refs/tags/android-16.0.0_r4/tools/releasetools/common.py#4032
-        echo -e "\n# --- Start patching dynamic partitions ---\n"
-        for p in $PARTITIONS_LIST; do
-            if [ ! -f "$TMP_DIR/$p.transfer.list" ]; then
-                continue
-            fi
-            if grep -q "Shrink partition $p " "$TMP_DIR/dynamic_partitions_op_list"; then
-                echo -e "\n# Patch partition $p\n"
-                echo -n 'ui_print("Patching '
-                echo -n "$p"
-                if [ -s "$TMP_DIR/$p.patch.dat" ]; then
-                    echo -n " image after verification."
-                else
-                    echo -n " image unconditionally..."
+        if $TARGET_USE_DYNAMIC_PARTITIONS; then
+            # https://android.googlesource.com/platform/build/+/refs/tags/android-16.0.0_r4/tools/releasetools/common.py#4032
+            echo -e "\n# --- Start patching dynamic partitions ---\n"
+            for p in $PARTITIONS_LIST; do
+                if [ ! -f "$TMP_DIR/$p.transfer.list" ]; then
+                    continue
                 fi
-                echo    '");'
-                if [[ "$p" == "system" ]]; then
-                    echo -n 'show_progress(0.'
-                    echo -n "$(bc -l <<< "9 - $PARTITION_COUNT")"
-                    echo    '00000, 0);'
-                else
-                    echo    'show_progress(0.100000, 0);'
+                if grep -q "Shrink partition $p " "$TMP_DIR/dynamic_partitions_op_list"; then
+                    echo -e "\n# Patch partition $p\n"
+                    echo -n 'ui_print("Patching '
+                    echo -n "$p"
+                    if [ -s "$TMP_DIR/$p.patch.dat" ]; then
+                        echo -n " image after verification."
+                    else
+                        echo -n " image unconditionally..."
+                    fi
+                    echo    '");'
+                    if [[ "$p" == "system" ]]; then
+                        echo -n 'show_progress(0.'
+                        echo -n "$(bc -l <<< "9 - $PARTITION_COUNT")"
+                        echo    '00000, 0);'
+                    else
+                        echo    'show_progress(0.100000, 0);'
+                    fi
+                    echo -n "block_image_update("
+                    GET_DEVICE_FROM_MOUNTPOINT "/$p"
+                    echo -n ', package_extract_file("'
+                    echo -n "$p.transfer.list"
+                    echo -n '"), "'
+                    echo -n "$p.new.dat"
+                    [ -f "$TMP_DIR/$p.new.dat.br" ] && echo -n ".br"
+                    echo -n '", "'
+                    echo -n "$p.patch.dat"
+                    echo    '") ||'
+                    echo -n '  abort("'
+                    [[ "$p" == "system" ]] && echo -n "E1001" || echo -n "E2001"
+                    echo -n ": Failed to update $p image."
+                    echo    '");'
                 fi
-                echo -n 'block_image_update(map_partition("'
-                echo -n "$p"
-                echo -n '"), package_extract_file("'
-                echo -n "$p.transfer.list"
-                echo -n '"), "'
-                echo -n "$p.new.dat"
-                [ -f "$TMP_DIR/$p.new.dat.br" ] && echo -n ".br"
-                echo -n '", "'
-                echo -n "$p.patch.dat"
-                echo    '") ||'
-                echo -n '  abort("'
-                [[ "$p" == "system" ]] && echo -n "E1001" || echo -n "E2001"
-                echo -n ": Failed to update $p image."
-                echo    '");'
+            done
+            echo -e "\n# Update dynamic partition metadata\n"
+            echo -n 'assert(update_dynamic_partitions(package_extract_file("dynamic_partitions_op_list")'
+            if [ -f "$TMP_DIR/unsparse_super_empty.img" ]; then
+                # https://github.com/LineageOS/android_build/commit/98549f6893c3a93057e2d4cdd1015a93e9473b16
+                # https://github.com/LineageOS/android_bootable_deprecated-ota/commit/e97be4333bd3824b8561c9637e9e6de28bc29da0
+                echo -n ', package_extract_file("unsparse_super_empty.img")'
             fi
-        done
-        echo -e "\n# Update dynamic partition metadata\n"
-        echo -n 'assert(update_dynamic_partitions(package_extract_file("dynamic_partitions_op_list")'
-        if [ -f "$TMP_DIR/unsparse_super_empty.img" ]; then
-            # https://github.com/LineageOS/android_build/commit/98549f6893c3a93057e2d4cdd1015a93e9473b16
-            # https://github.com/LineageOS/android_bootable_deprecated-ota/commit/e97be4333bd3824b8561c9637e9e6de28bc29da0
-            echo -n ', package_extract_file("unsparse_super_empty.img")'
+            echo    '));'
         fi
-        echo    '));'
         for p in $PARTITIONS_LIST; do
             if [ ! -f "$TMP_DIR/$p.transfer.list" ]; then
                 continue
             fi
-            if ! grep -q "Shrink partition $p " "$TMP_DIR/dynamic_partitions_op_list"; then
-                echo -e "\n# Patch partition $p\n"
+            if ! $TARGET_USE_DYNAMIC_PARTITIONS || ! grep -q "Shrink partition $p " "$TMP_DIR/dynamic_partitions_op_list"; then
+                $TARGET_USE_DYNAMIC_PARTITIONS && echo -e "\n# Patch partition $p\n"
                 echo -n 'ui_print("Patching '
                 echo -n "$p"
                 if [ -s "$TMP_DIR/$p.patch.dat" ]; then
@@ -354,9 +361,9 @@ GENERATE_UPDATER_SCRIPT()
                 else
                     echo    'show_progress(0.100000, 0);'
                 fi
-                echo -n 'block_image_update(map_partition("'
-                echo -n "$p"
-                echo -n '"), package_extract_file("'
+                echo -n "block_image_update("
+                GET_DEVICE_FROM_MOUNTPOINT "/$p"
+                echo -n ', package_extract_file("'
                 echo -n "$p.transfer.list"
                 echo -n '"), "'
                 echo -n "$p.new.dat"
@@ -370,7 +377,7 @@ GENERATE_UPDATER_SCRIPT()
                 echo    '");'
             fi
         done
-        echo -e "\n# --- End patching dynamic partitions ---\n"
+        $TARGET_USE_DYNAMIC_PARTITIONS && echo -e "\n# --- End patching dynamic partitions ---\n"
 
         for b in $KERNEL_BINS; do
             if [ -f "$TMP_DIR/$b.img" ]; then
@@ -379,16 +386,16 @@ GENERATE_UPDATER_SCRIPT()
                 echo    '");'
                 echo -n 'package_extract_file("'
                 echo -n "$b.img"
-                echo -n '", "'
-                echo -n "$TARGET_OS_BOOT_DEVICE_PATH/$b"
-                echo    '");'
+                echo -n '", '
+                GET_DEVICE_FROM_MOUNTPOINT "/$b"
+                echo    ");"
             fi
         done
         if [ -f "$TMP_DIR/boot.img" ]; then
             echo    'ui_print("Installing boot image...");'
-            echo -n 'package_extract_file("boot.img", "'
-            echo -n "$TARGET_OS_BOOT_DEVICE_PATH"
-            echo    '/boot");'
+            echo -n 'package_extract_file("boot.img", '
+            GET_DEVICE_FROM_MOUNTPOINT "/boot"
+            echo    ");"
         fi
 
         if [ -f "$SRC_DIR/target/$TARGET_CODENAME/installer/install-end.edify" ]; then
@@ -464,10 +471,14 @@ if [ ! -d "$SRC_DIR/target/$DEVICE" ]; then
     exit 1
 fi
 
+TARGET_USE_DYNAMIC_PARTITIONS="$(grep "^use_dynamic_partitions" <<< "$TARGET_BUILD_INFO" | cut -d "=" -f 2 -s)"
+
 VERIFY_SOURCE_COMPATIBILITY
 
-LOG "- Generating dynamic_partitions_op_list"
-GENERATE_OP_LIST
+if $TARGET_USE_DYNAMIC_PARTITIONS; then
+    LOG "- Generating dynamic_partitions_op_list"
+    GENERATE_OP_LIST
+fi
 
 for p in $PARTITIONS_LIST; do
     if [ ! -f "$TMP_DIR/target/$p.img" ]; then
