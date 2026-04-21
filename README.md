@@ -22,7 +22,7 @@
 
 
 # ProjectDozG Feature
-- OTG Update but not now
+- OTA Update but not now
 - Unlock Higher FPS option in Game(Example:Pubg)
 - Play Integrity Fix integrated
 # Licensing
