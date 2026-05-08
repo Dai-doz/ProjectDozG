@@ -1,7 +1,7 @@
 <img width="1280" height="720" alt="1757947315_one_ui_8_story(1)" src="https://github.com/user-attachments/assets/e4c310e8-b030-4397-a275-0d97d0117cee" />
 
 
-              ![Kernel Support](https://img.shields.io/badge/Kernel-4.4%20|%204.9%20|%204.14%20|%204.19-green.svg)
+  ![Kernel Support](https://img.shields.io/badge/Kernel-4.4%20|%204.9%20|%204.14%20|%204.19-green.svg)
 </h1>
 <p align="center">
   <a href="https://github.com/salvogiangri/UN1CA/blob/sixteen/LICENSE"><img loading="lazy" src="https://img.shields.io/github/license/salvogiangri/UN1CA?style=for-the-badge&logo=github"/></a>
